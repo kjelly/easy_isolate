@@ -25,7 +25,6 @@ Future<dynamic> runInIsolate(dynamic Function(List<dynamic>) func,
 enum ActorCommand { stop }
 
 class Actor {
-  bool initialized = false;
   var count = 0;
   Completer? completer;
   final ReceivePort _returnPort = ReceivePort();
@@ -90,15 +89,16 @@ class Actor {
   }
 
   Future call(dynamic args) async {
+    count += 1;
     while (completer != null || _argsPort == null) {
       await Future.delayed(Duration(microseconds: 1));
     }
     completer = Completer();
     if (_argsPort != null) {
-      count += 1;
       _argsPort?.send(args);
     } else {
       completer?.complete(null);
+      count -= 1;
     }
     var ret = completer!.future;
     return ret;
@@ -112,7 +112,7 @@ class Actor {
     _returnPort.close();
   }
 
-  Future wait([Duration duration = const Duration(milliseconds: 10)]) async {
+  Future wait([Duration duration = const Duration(milliseconds: 1)]) async {
     await Future.delayed(duration);
   }
 }

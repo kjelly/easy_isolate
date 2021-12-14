@@ -32,6 +32,5 @@ Future<void> main() async {
   actor1.call(['2']).then((data) {
     print('call $data');
   });
-  await actor.wait();
   actor1.close();
 }
