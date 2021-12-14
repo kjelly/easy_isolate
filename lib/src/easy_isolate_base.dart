@@ -70,7 +70,7 @@ class Actor {
       return true;
     }).asBroadcastStream();
 
-    stream.listen((data) async {
+    _stream?.listen((data) async {
       if (completer == null) {
         return;
       }
@@ -79,13 +79,8 @@ class Actor {
     });
   }
 
-  Stream<dynamic> get stream async* {
-    while (_stream == null) {
-      await Future.delayed(Duration(microseconds: 1));
-    }
-    await for (final i in _stream!) {
-      yield i;
-    }
+  Stream<dynamic> get stream {
+    return _stream!;
   }
 
   Future call(dynamic args) async {
