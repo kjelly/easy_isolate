@@ -11,7 +11,6 @@ Future<void> main() async {
   Actor actor = Actor((args) {
     return 'actor' + args.toString();
   });
-  await actor.init();
   actor.stream.listen((data) {
     print(data);
   });
@@ -21,19 +20,17 @@ Future<void> main() async {
   await actor.close();
 
   Actor actor1 = Actor((args) {
-    print(args);
-    return 'g';
+    return args + args;
   });
-  await actor1.init();
   actor1.stream.listen((data) {
     print(data);
   });
 
   actor1.call(['1']).then((data) {
-    print(data);
+    print('call $data');
   });
   actor1.call(['2']).then((data) {
-    print(data);
+    print('call $data');
   });
-  await actor1.close();
+  actor1.close();
 }

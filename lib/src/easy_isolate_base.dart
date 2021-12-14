@@ -33,12 +33,7 @@ class Actor {
   late final dynamic Function(List<dynamic>) _func;
   Stream<dynamic>? _stream;
 
-  Actor(this._func);
-
-  Future init() async {
-    if (initialized) {
-      throw Exception('The actor already initialized');
-    }
+  Actor(this._func) {
     void Function(List<dynamic>) _generateFunc(
         dynamic Function(List<dynamic>) func) {
       return (List<dynamic> args) async {
@@ -65,12 +60,11 @@ class Actor {
       };
     }
 
-    await Isolate.spawn(_generateFunc(_func), [_returnPort.sendPort]);
+    Isolate.spawn(_generateFunc(_func), [_returnPort.sendPort]);
 
     _stream = _returnPort.where((data) {
       if (data is SendPort) {
         _argsPort = data;
-        initialized = true;
         return false;
       }
       count -= 1;
@@ -84,41 +78,40 @@ class Actor {
       completer?.complete(data);
       completer = null;
     });
-    await Future.delayed(Duration(milliseconds: 1));
   }
 
-  Stream<dynamic> get stream {
-    return _stream!;
-  }
-
-  Future _send(dynamic args) async {
-    while (_argsPort == null) {
-      await Future.delayed(Duration(milliseconds: 1));
-    }
-    if (_argsPort != null) {
-      count += 1;
-      _argsPort?.send(args);
+  Stream<dynamic> get stream async* {
+    await for (final i in _stream!) {
+      yield i;
     }
   }
 
   Future call(dynamic args) async {
-    if (!initialized) {
-      await init();
-    }
-    while (completer != null) {
+    await wait();
+    while (completer != null || _argsPort == null) {
       await Future.delayed(Duration(milliseconds: 1));
     }
     completer = Completer();
-    await _send(args);
+    if (_argsPort != null) {
+      count += 1;
+      _argsPort?.send(args);
+    } else {
+      completer?.complete(null);
+    }
     var ret = completer!.future;
     return ret;
   }
 
   Future close() async {
+    await wait();
     while (count > 0) {
       await Future.delayed(Duration(milliseconds: 1));
     }
     _argsPort?.send(ActorCommand.stop);
     _returnPort.close();
+  }
+
+  Future wait() async {
+    await Future.delayed(Duration(milliseconds: 1));
   }
 }
