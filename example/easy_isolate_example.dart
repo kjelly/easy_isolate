@@ -23,7 +23,7 @@ Future<void> main() async {
     return args + args;
   });
   actor1.stream.listen((data) {
-    print(data);
+    print('listen $data');
   });
 
   actor1.call(['1']).then((data) {
@@ -32,5 +32,6 @@ Future<void> main() async {
   actor1.call(['2']).then((data) {
     print('call $data');
   });
+  await actor.wait();
   actor1.close();
 }

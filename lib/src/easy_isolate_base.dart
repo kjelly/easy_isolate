@@ -81,15 +81,17 @@ class Actor {
   }
 
   Stream<dynamic> get stream async* {
+    while (_stream == null) {
+      await Future.delayed(Duration(microseconds: 1));
+    }
     await for (final i in _stream!) {
       yield i;
     }
   }
 
   Future call(dynamic args) async {
-    await wait();
     while (completer != null || _argsPort == null) {
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future.delayed(Duration(microseconds: 1));
     }
     completer = Completer();
     if (_argsPort != null) {
@@ -103,15 +105,14 @@ class Actor {
   }
 
   Future close() async {
-    await wait();
     while (count > 0) {
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future.delayed(Duration(microseconds: 1));
     }
     _argsPort?.send(ActorCommand.stop);
     _returnPort.close();
   }
 
-  Future wait() async {
-    await Future.delayed(Duration(milliseconds: 1));
+  Future wait([Duration duration = const Duration(milliseconds: 10)]) async {
+    await Future.delayed(duration);
   }
 }
