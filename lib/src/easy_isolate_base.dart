@@ -1,30 +1,10 @@
 import 'dart:async';
 import 'dart:isolate';
 
-Future<dynamic> runInIsolate(dynamic Function(List<dynamic>) func,
-    [List<dynamic> args = const []]) async {
-  void Function(List<dynamic>) _generateFunc(
-      dynamic Function(List<dynamic>) func) {
-    return (List<dynamic> args) {
-      SendPort responsePort = args[0];
-      dynamic ret;
-      try {
-        ret = func(args.sublist(1));
-      } catch (e) {
-        ret = e;
-      }
-      Isolate.exit(responsePort, ret);
-    };
-  }
+enum EasyIsolateCommand { stop }
 
-  final p = ReceivePort();
-  await Isolate.spawn(_generateFunc(func), [p.sendPort, ...args]);
-  return (await p.first);
-}
-
-enum ActorCommand { stop }
-
-class Actor {
+class EasyIsolate {
+  var closed = false;
   var count = 0;
   Completer? completer;
   final ReceivePort _returnPort = ReceivePort();
@@ -32,17 +12,19 @@ class Actor {
   late final dynamic Function(List<dynamic>) _func;
   Stream<dynamic>? _stream;
 
-  Actor(this._func) {
+  EasyIsolate(this._func) {
+    final metaPort = ReceivePort();
     void Function(List<dynamic>) _generateFunc(
         dynamic Function(List<dynamic>) func) {
       return (List<dynamic> args) async {
         SendPort responsePort = args[0];
+        SendPort metaSendPort = args[1];
         ReceivePort inputPort = ReceivePort();
-        responsePort.send(inputPort.sendPort);
+        metaSendPort.send(inputPort.sendPort);
 
         inputPort.listen((args) {
-          if (args is ActorCommand) {
-            if (args == ActorCommand.stop) {
+          if (args is EasyIsolateCommand) {
+            if (args == EasyIsolateCommand.stop) {
               inputPort.close();
               Isolate.exit();
             }
@@ -59,18 +41,18 @@ class Actor {
       };
     }
 
-    Isolate.spawn(_generateFunc(_func), [_returnPort.sendPort]);
+    Isolate.spawn(
+        _generateFunc(_func), [_returnPort.sendPort, metaPort.sendPort]);
 
-    _stream = _returnPort.where((data) {
-      if (data is SendPort) {
-        _argsPort = data;
-        return false;
-      }
-      count -= 1;
-      return true;
-    }).asBroadcastStream();
+    metaPort.listen((data) {
+      _argsPort = data;
+      metaPort.close();
+    });
+
+    _stream = _returnPort.asBroadcastStream();
 
     _stream?.listen((data) async {
+      count -= 1;
       if (completer == null) {
         return;
       }
@@ -84,6 +66,9 @@ class Actor {
   }
 
   Future call(dynamic args) async {
+    if (closed) {
+      throw Exception("The actor is closed");
+    }
     count += 1;
     while (completer != null || _argsPort == null) {
       await Future.delayed(Duration(microseconds: 1));
@@ -103,11 +88,29 @@ class Actor {
     while (count > 0) {
       await Future.delayed(Duration(microseconds: 1));
     }
-    _argsPort?.send(ActorCommand.stop);
+    _argsPort?.send(EasyIsolateCommand.stop);
     _returnPort.close();
+    closed = true;
   }
 
-  Future wait([Duration duration = const Duration(milliseconds: 1)]) async {
-    await Future.delayed(duration);
+  static run(dynamic Function(List<dynamic>) func,
+      [List<dynamic> args = const []]) async {
+    void Function(List<dynamic>) _generateFunc(
+        dynamic Function(List<dynamic>) func) {
+      return (List<dynamic> args) {
+        SendPort responsePort = args[0];
+        dynamic ret;
+        try {
+          ret = func(args.sublist(1));
+        } catch (e) {
+          ret = e;
+        }
+        Isolate.exit(responsePort, ret);
+      };
+    }
+
+    final p = ReceivePort();
+    await Isolate.spawn(_generateFunc(func), [p.sendPort, ...args]);
+    return (await p.first);
   }
 }

@@ -1,14 +1,15 @@
 import 'package:easy_isolate/easy_isolate.dart';
+import 'dart:io';
 
 Future<void> main() async {
-  var o = await runInIsolate((args) {
+  var o = await EasyIsolate.run((args) {
     return args[2];
   }, [2, 3]);
   if (o is Error) {
     print(o);
   }
 
-  Actor actor = Actor((args) {
+  EasyIsolate actor = EasyIsolate((args) {
     return 'actor' + args.toString();
   });
   actor.stream.listen((data) {
@@ -19,17 +20,22 @@ Future<void> main() async {
   await actor.call(["bye"]);
   await actor.close();
 
-  Actor actor1 = Actor((args) {
+  EasyIsolate actor1 = EasyIsolate((args) {
     return args + args;
   });
   actor1.stream.listen((data) {
     print('listen $data');
   });
-
   actor1.call(['1']).then((data) {
     print('call $data');
   });
   actor1.call(['2']).then((data) {
+    print('call $data');
+  });
+  actor1.call(['3']).then((data) {
+    print('call $data');
+  });
+  actor1.call(['4']).then((data) {
     print('call $data');
   });
   actor1.close();
