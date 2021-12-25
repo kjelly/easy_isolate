@@ -112,7 +112,6 @@ class EasyIsolate {
     lastFreeWorkerIndex = freeWorkerIndex + 1;
     _completerList[freeWorkerIndex] = Completer();
     _stream[freeWorkerIndex]?.first.then((data) {
-      print('done: $data');
       count -= 1;
       _completerList[freeWorkerIndex]?.complete(data);
       _completerList[freeWorkerIndex] = null;
