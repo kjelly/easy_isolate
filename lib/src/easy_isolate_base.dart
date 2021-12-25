@@ -1,19 +1,32 @@
 import 'dart:async';
 import 'dart:isolate';
+import 'package:async/async.dart';
 
-enum EasyIsolateCommand { stop }
+enum EasyIsolateCommand { stop, notReady }
 
 class EasyIsolate {
   var closed = false;
+  var init = false;
   var count = 0;
   Completer? completer;
-  final ReceivePort _returnPort = ReceivePort();
-  SendPort? _argsPort;
+  late final List<ReceivePort> _returnPort;
+  late List<SendPort?> _sendPort;
   late final dynamic Function(List<dynamic>) _func;
-  Stream<dynamic>? _stream;
+  late List<Stream<dynamic>?> _stream;
+  late List<Completer?> _completerList;
+  int worker;
+  int _lastFreeWorkerIndex = 0;
 
-  EasyIsolate(this._func) {
-    final metaPort = ReceivePort();
+  EasyIsolate(this._func, {this.worker = 1}) {
+    if (worker < 1) {
+      throw Exception("The worker should be at least 1.");
+    }
+    final tempReceivePort = List.generate(worker, (_) => ReceivePort());
+    _returnPort = List.generate(worker, (_) => ReceivePort());
+    _sendPort = List.filled(worker, null);
+    _stream = List.filled(worker, null);
+    _completerList = List.filled(worker, null);
+
     void Function(List<dynamic>) _generateFunc(
         dynamic Function(List<dynamic>) func) {
       return (List<dynamic> args) async {
@@ -41,46 +54,78 @@ class EasyIsolate {
       };
     }
 
-    Isolate.spawn(
-        _generateFunc(_func), [_returnPort.sendPort, metaPort.sendPort]);
+    for (var i = 0; i < worker; i++) {
+      Isolate.spawn(_generateFunc(_func),
+          [_returnPort[i].sendPort, tempReceivePort[i].sendPort]);
 
-    metaPort.listen((data) {
-      _argsPort = data;
-      metaPort.close();
-    });
+      tempReceivePort[i].first.then((data) {
+        _sendPort[i] = data;
+        tempReceivePort[i].close();
+      });
 
-    _stream = _returnPort.asBroadcastStream();
-
-    _stream?.listen((data) async {
-      count -= 1;
-      if (completer == null) {
-        return;
-      }
-      completer?.complete(data);
-      completer = null;
-    });
+      _stream[i] = _returnPort[i].asBroadcastStream();
+    }
   }
 
-  Stream<dynamic> get stream {
-    return _stream!;
+  int get lastFreeWorkerIndex => _lastFreeWorkerIndex;
+
+  set lastFreeWorkerIndex(int v) {
+    if (v >= worker) {
+      _lastFreeWorkerIndex = 0;
+    } else {
+      _lastFreeWorkerIndex = v;
+    }
+  }
+
+  Stream<dynamic> get stream async* {
+    while (!init) {
+      await Future.delayed(Duration(microseconds: 1));
+    }
+    await for (final i in StreamGroup.merge(
+        _stream.where((i) => i != null).cast<Stream<dynamic>>())) {
+      yield i;
+    }
   }
 
   Future call(dynamic args) async {
     if (closed) {
-      throw Exception("The actor is closed");
+      throw Exception("The instance is closed");
     }
     count += 1;
-    while (completer != null || _argsPort == null) {
-      await Future.delayed(Duration(microseconds: 1));
+    if (!init) {
+      for (var i = 0; i < worker; i++) {
+        while (_sendPort[i] == null) {
+          await Future.delayed(Duration(microseconds: 1));
+        }
+      }
+      init = true;
     }
-    completer = Completer();
-    if (_argsPort != null) {
-      _argsPort?.send(args);
+    var freeWorkerIndex = lastFreeWorkerIndex;
+    while (true) {
+      if (freeWorkerIndex >= worker) {
+        freeWorkerIndex = 0;
+        await Future.delayed(Duration(microseconds: 100));
+      }
+      if (_completerList[freeWorkerIndex] == null) break;
+      freeWorkerIndex += 1;
+    }
+    lastFreeWorkerIndex = freeWorkerIndex + 1;
+    _completerList[freeWorkerIndex] = Completer();
+    _stream[freeWorkerIndex]?.first.then((data) {
+      print('done: $data');
+      count -= 1;
+      _completerList[freeWorkerIndex]?.complete(data);
+      _completerList[freeWorkerIndex] = null;
+    });
+
+    if (_sendPort[freeWorkerIndex] != null) {
+      _sendPort[freeWorkerIndex]?.send(args);
     } else {
-      completer?.complete(null);
+      _completerList[freeWorkerIndex]?.complete(EasyIsolateCommand.notReady);
+      _completerList[freeWorkerIndex] = null;
       count -= 1;
     }
-    var ret = completer!.future;
+    var ret = _completerList[freeWorkerIndex]!.future;
     return ret;
   }
 
@@ -88,8 +133,10 @@ class EasyIsolate {
     while (count > 0) {
       await Future.delayed(Duration(microseconds: 1));
     }
-    _argsPort?.send(EasyIsolateCommand.stop);
-    _returnPort.close();
+    for (var i = 0; i < worker; i++) {
+      _sendPort[i]?.send(EasyIsolateCommand.stop);
+      _returnPort[i].close();
+    }
     closed = true;
   }
 

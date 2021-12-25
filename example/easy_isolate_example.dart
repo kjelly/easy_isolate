@@ -22,7 +22,7 @@ Future<void> main() async {
 
   EasyIsolate actor1 = EasyIsolate((args) {
     return args + args;
-  });
+  }, worker: 1);
   actor1.stream.listen((data) {
     print('listen $data');
   });
