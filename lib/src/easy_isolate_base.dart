@@ -167,4 +167,36 @@ class EasyIsolate {
     await Isolate.spawn(_generateFunc(func), [p.sendPort, ...args]);
     return (await p.first);
   }
+
+  /// The func should return a Stream and should not be a closure with async*.
+  static Stream createStream(Stream Function(List<dynamic>) func,
+      [List<dynamic> args = const []]) async* {
+    void Function(List<dynamic>) _generateFunc(
+        Stream Function(List<dynamic>) func) {
+      return (List<dynamic> args) {
+        SendPort responsePort = args[0];
+        func(args.sublist(1)).listen((data) {
+          responsePort.send(data);
+        }, onDone: () {
+          responsePort.send(EasyIsolateCommand.stop);
+        });
+      };
+    }
+
+    final p = ReceivePort();
+    var isolate =
+        await Isolate.spawn(_generateFunc(func), [p.sendPort, ...args]);
+    await for (final i in p) {
+      if (i is Error || i is Exception) {
+        throw i;
+      } else if (i is EasyIsolateCommand) {
+        if (i == EasyIsolateCommand.stop) {
+          isolate.kill();
+          p.close();
+        }
+      } else {
+        yield i;
+      }
+    }
+  }
 }
