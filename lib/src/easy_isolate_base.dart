@@ -14,6 +14,7 @@ class EasyIsolate {
   late final dynamic Function(List<dynamic>) _func;
   late List<Stream<dynamic>?> _stream;
   late List<Completer?> _completerList;
+  late List<Isolate?> _isolateList;
   int worker;
   int _lastFreeWorkerIndex = 0;
 
@@ -26,6 +27,7 @@ class EasyIsolate {
     _sendPort = List.filled(worker, null);
     _stream = List.filled(worker, null);
     _completerList = List.filled(worker, null);
+    _isolateList = List.filled(worker, null);
 
     void Function(List<dynamic>) _generateFunc(
         dynamic Function(List<dynamic>) func) {
@@ -55,8 +57,13 @@ class EasyIsolate {
     }
 
     for (var i = 0; i < worker; i++) {
-      Isolate.spawn(_generateFunc(_func),
-          [_returnPort[i].sendPort, tempReceivePort[i].sendPort]);
+      final _index = i;
+      Isolate.spawn(_generateFunc(_func), [
+        _returnPort[i].sendPort,
+        tempReceivePort[i].sendPort
+      ]).then((isolate) {
+        _isolateList[_index] = isolate;
+      });
 
       tempReceivePort[i].first.then((data) {
         _sendPort[i] = data;
@@ -135,6 +142,7 @@ class EasyIsolate {
     for (var i = 0; i < worker; i++) {
       _sendPort[i]?.send(EasyIsolateCommand.stop);
       _returnPort[i].close();
+      _isolateList[i]?.kill();
     }
     closed = true;
   }
