@@ -39,4 +39,16 @@ Future<void> main() async {
     print('call $data');
   });
   actor1.close();
+
+  EasyIsolate.createStream((args) => Stream.fromIterable([1, 2, 3]))
+      .listen((data) {
+    print('stream: $data');
+  });
+}
+
+Stream testStream(List<dynamic> args) async* {
+  var index = 0;
+  while (index < 5) {
+    yield index++;
+  }
 }
