@@ -2,7 +2,9 @@ import 'package:easy_isolate/easy_isolate.dart';
 import 'dart:io';
 
 Future<void> main() async {
+  var outside = 1;
   var o = await EasyIsolate.run((args) {
+    print(outside);
     return args[2];
   }, [2, 3]);
   if (o is Error) {
@@ -40,8 +42,9 @@ Future<void> main() async {
   });
   actor1.close();
 
-  EasyIsolate.createStream((args) => Stream.fromIterable([1, 2, 3]))
-      .listen((data) {
+  EasyIsolate.createStream((args) {
+    return testStream(args);
+  }).listen((data) {
     print('stream: $data');
   });
 }

@@ -1,39 +1,57 @@
-<!-- 
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# EasyIsolate
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/guides/libraries/writing-package-pages). 
+The library provide a wrapper to use the isolate more easily.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-library-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/developing-packages). 
--->
+## Usecase
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+### Call one, get one
 
-## Features
-
-TODO: List what your package can do. Maybe include images, gifs, or videos.
-
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder. 
-
-```dart
-const like = 'sample';
+Run the anonymous function in the another isolate. When the anonymous function finished,
+the isolate end.
+```
+import 'package:easy_isolate/easy_isolate.dart';
+Future<void> main() async {
+  var o = await EasyIsolate.run((args) {return args[0];}, [1, 2]);
+  // o will be 1.
+}
 ```
 
-## Additional information
+### Call one, get one, multiple isolates
 
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
+Create multiple isolates to  wait for request.
+Send the request by calling the `call` method.
+If no more request, call the close method to end the isolates.
+The isolates will be alive till the `close` method is called.
+
+```
+import 'package:easy_isolate/easy_isolate.dart';
+Future<void> main() async {
+  EasyIsolate actor1 = EasyIsolate((args) {
+    return args + args;
+  }, worker: 2);
+  await actor.call(["bye"]);
+  await actor.close();
+}
+```
+
+### Call one, get stream, multiple isolates
+
+Create the stream in the another isolate. When the stream end,
+The isolate end.
+
+```
+import 'package:easy_isolate/easy_isolate.dart';
+Future<void> main() async {
+  EasyIsolate.createStream((args) {
+    return testStream();
+  }).listen((data) {
+    print('stream: $data');
+  });
+}
+Stream testStream() async* {
+  var index = 0;
+  while (index < 5) {
+    yield index++;
+  }
+}
+```
