@@ -1,12 +1,12 @@
 import 'package:easy_isolate/easy_isolate.dart';
-import 'dart:io';
 
 Future<void> main() async {
   var outside = 1;
   var o = await EasyIsolate.run((args) {
-    print(outside);
+    print('outside: $outside');
     return args[2];
   }, [2, 3]);
+  outside = 2;
   if (o is Error) {
     print(o);
   }

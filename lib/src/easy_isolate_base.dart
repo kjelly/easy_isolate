@@ -37,7 +37,7 @@ class EasyIsolate {
         ReceivePort inputPort = ReceivePort();
         metaSendPort.send(inputPort.sendPort);
 
-        inputPort.listen((args) {
+        inputPort.listen((args) async {
           if (args is EasyIsolateCommand) {
             if (args == EasyIsolateCommand.stop) {
               inputPort.close();
@@ -47,7 +47,7 @@ class EasyIsolate {
           }
           dynamic ret;
           try {
-            ret = func(args);
+            ret = await func(args);
           } catch (e) {
             ret = e;
           }
@@ -156,7 +156,9 @@ class EasyIsolate {
         dynamic ret;
         try {
           ret = func(args.sublist(1));
-        } catch (e) {
+        } catch (e, s) {
+          print(e);
+          print(s);
           ret = e;
         }
         Isolate.exit(responsePort, ret);
